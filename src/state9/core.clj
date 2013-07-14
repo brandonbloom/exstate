@@ -104,11 +104,13 @@
     (dosync
       (let [p (cons service (node-path path))
             node (get-in @data p)]
-        (if (and node (contains? node :value))
-          (:value node)
-          (let [x (-observe service path)]
-            (alter data update-in p assoc :value x)
-            x))))))
+        (cond
+          (and node (contains? node :value))
+            (:value node)
+          (= @database this)
+            (let [x (-observe service path)]
+              (alter data update-in p assoc :value x)
+              x))))))
 
 (deftype Database [services snapshot]
 
@@ -225,6 +227,12 @@
 
   (deref-at t [:clock])
   (deref-at t [:clock :foo])
+
+  (snapshot! db)
+  (def t* @mnt)
+
+  (deref-at t* [:clock])
+  (deref-at t* [:clock :foo])
 
   ;;;
 
