@@ -1,4 +1,4 @@
-(ns state9.core
+(ns exstate.core
   (:require [clojure.set :as set]))
 
 
@@ -145,8 +145,8 @@
   ([mapping endpoint path]
    (mount mapping endpoint path :replace))
   ([mapping endpoint path mode]
-   (assert (vector? path))
-   (assert (mapping-modes mode))
+   {:pre [(vector? path)
+          (mapping-modes mode)]}
    (let [endpoint* (if (satisfies? IService endpoint)
                      [endpoint []]
                      endpoint)]

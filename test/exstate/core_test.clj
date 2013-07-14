@@ -1,6 +1,6 @@
-(ns state9.core-test
+(ns exstate.core-test
   (:use clojure.test
-        state9.core))
+        exstate.core))
 
 (deftest a-test
   (testing "FIXME, I fail."
