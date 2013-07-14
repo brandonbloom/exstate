@@ -16,7 +16,7 @@
 (defprotocol ISnapshot
   "A memoization of observations about a database at a point in time"
   ;;TODO some kind of version number for comparisons?
-  (-database [this]))
+  (-observation [this endpoint]))
 
 (defprotocol IMapping
   "Assigns services to paths via a hierarchical routing table"
@@ -35,13 +35,17 @@
 
 (deftype Tree [mapping snapshot]
   ITree
-  (-deref-at [this path]))
+  (-deref-at [this path]
+    (->> (-endpoints mapping path)
+         (map #(-observation snapshot %))
+         (remove nil?)
+         first)))
 
-(defn- route-path [path]
+(defn- node-path [path]
   (interleave (repeat :children) path))
 
 (defn- endpoint-path [path ord]
-  (concat (route-path path) [:endpoints ord]))
+  (concat (node-path path) [:endpoints ord]))
 
 (deftype Mapping [database min-ord max-ord routes]
 
@@ -96,7 +100,15 @@
 
 (deftype Snapshot [database data]
   ISnapshot
-  )
+  (-observation [this [service path]]
+    (dosync
+      (let [p (cons service (node-path path))
+            node (get-in @data p)]
+        (if (and node (contains? node :value))
+          (:value node)
+          (let [x (-observe service path)]
+            (alter data update-in p assoc :value x)
+            x))))))
 
 (deftype Database [services snapshot]
 
@@ -198,12 +210,23 @@
 
   (def db (create-database))
   (deref db)
+
   (snapshot! db)
+
+  ;;;
 
   (def mnt (-> (empty-mapping db)
                (mount clock-service [:clock])
                (mount counter-service [:counters])))
+
   (fipp.edn/pprint (.routes mnt))
+
+  (def t @mnt)
+
+  (deref-at t [:clock])
+  (deref-at t [:clock :foo])
+
+  ;;;
 
   (def mnt (-> (empty-mapping db)
                (mount (constant-tree :a) [])
@@ -211,6 +234,7 @@
                (mount (constant-root :c) [:foo :bar] :before)
                (mount (constant-root :d) [:foo :baz] :after)
                ))
+
   (fipp.edn/pprint (.routes mnt))
 
   (-endpoints mnt [])
@@ -218,5 +242,15 @@
   (-endpoints mnt [:foo :bar])
   (-endpoints mnt [:foo :baz])
   (-endpoints mnt [:foo :baz :bat])
+
+  (def t @mnt)
+
+  (deref-at t [])
+  (deref-at t [:foo])
+  (deref-at t [:foo :x])
+  (deref-at t [:foo :bar])
+  (deref-at t [:foo :bar :y])
+  (deref-at t [:foo :baz])
+  (deref-at t [:foo :baz :z])
 
 )
