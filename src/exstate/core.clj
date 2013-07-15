@@ -27,7 +27,7 @@
 
 (defprotocol ITree
   "A snapshot of a database viewed with a particular hierarchical mapping"
-  (-mapping [this])
+  ;;TODO allow some upward traversal? getting to the next point in time?
   (-deref-at [this path]))
 
 
@@ -73,8 +73,15 @@
           (Mapping. database min-ord max-ord routes*))))
 
   (-bind [this src dest mode]
-    ;;TODO this requires some trickery after via -endpoints
-    )
+    (let [endpoints (-endpoints this src)]
+      (->> (case mode
+             :replace [endpoints (cons :replace (repeat :after))]
+             :before [(reverse endpoints) (repeat :before)]
+             :after [endpoints (repeat :after)])
+           (apply map vector)
+           (reduce (fn [mapping [endpoint mode]]
+                     (-mount mapping endpoint dest mode))
+                   this))))
 
   (-unmap [this path]
     ;;TODO remove subtree worth of routes
@@ -152,11 +159,14 @@
                      endpoint)]
      (-mount mapping endpoint* path mode))))
 
-(defn bind [mapping src dest mode]
-  {:pre [(vector? src)
-         (vector? dest)
-         (mapping-modes mode)]}
-  (-bind mapping src dest mode))
+(defn bind
+  ([mapping src dest]
+   (bind mapping src dest :replace))
+  ([mapping src dest mode]
+   {:pre [(vector? src)
+          (vector? dest)
+          (mapping-modes mode)]}
+   (-bind mapping src dest mode)))
 
 (defn unmap [mapping path]
   {:pre [(vector? path)]}
@@ -241,7 +251,7 @@
                (mount (constant-tree :b) [:foo])
                (mount (constant-root :c) [:foo :bar] :before)
                (mount (constant-root :d) [:foo :baz] :after)
-               ))
+               (bind [] [:foo :a])))
 
   (fipp.edn/pprint (.routes mnt))
 
@@ -260,5 +270,7 @@
   (deref-at t [:foo :bar :y])
   (deref-at t [:foo :baz])
   (deref-at t [:foo :baz :z])
+  (deref-at t [:foo :a])
+  (deref-at t [:foo :b])
 
 )
